@@ -53,7 +53,73 @@ function downloadTextFile(filename: string, content: string, mime = "text/calend
   a.remove();
   URL.revokeObjectURL(url);
 }
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
 
+function toICSDateUTC(d: Date) {
+  // UTC timestamp like 20260301T120000Z
+  return (
+    d.getUTCFullYear() +
+    pad(d.getUTCMonth() + 1) +
+    pad(d.getUTCDate()) +
+    "T" +
+    pad(d.getUTCHours()) +
+    pad(d.getUTCMinutes()) +
+    pad(d.getUTCSeconds()) +
+    "Z"
+  );
+}
+
+function toDateValue(d: Date) {
+  // VALUE=DATE like 20260306
+  return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate());
+}
+
+function escapeICS(text: string) {
+  return (text ?? "")
+    .replaceAll("\\", "\\\\")
+    .replaceAll("\n", "\\n")
+    .replaceAll(",", "\\,")
+    .replaceAll(";", "\\;");
+}
+
+function buildICS(events: { date: Date; title: string; description?: string }[]) {
+  const now = new Date();
+  const dtstamp = toICSDateUTC(now);
+
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//ExcelToICS//TR",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+  ];
+
+  for (const e of events) {
+    const uid =
+      (typeof crypto !== "undefined" && "randomUUID" in crypto)
+        ? crypto.randomUUID()
+        : String(Math.random()).slice(2) + "@exceltoics";
+
+    // all-day event (DTEND is next day)
+    const startDate = new Date(e.date.getFullYear(), e.date.getMonth(), e.date.getDate());
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 1);
+
+    lines.push("BEGIN:VEVENT");
+    lines.push(`UID:${uid}`);
+    lines.push(`DTSTAMP:${dtstamp}`);
+    lines.push(`DTSTART;VALUE=DATE:${toDateValue(startDate)}`);
+    lines.push(`DTEND;VALUE=DATE:${toDateValue(endDate)}`);
+    lines.push(`SUMMARY:${escapeICS(e.title)}`);
+    if (e.description) lines.push(`DESCRIPTION:${escapeICS(e.description)}`);
+    lines.push("END:VEVENT");
+  }
+
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
 function sheetToRowsWithSmartHeader(ws: XLSX.WorkSheet): RowObj[] {
   const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
   if (!grid.length) return [];
