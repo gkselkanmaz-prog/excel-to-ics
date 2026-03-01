@@ -246,15 +246,15 @@ export default function Page() {
       };
     });
 
-    const { error, value } = createEvents(events as any);
-    if (error || !value) {
-      console.error(error);
-      return alert("ICS üretirken hata oldu.");
-    }
+const ics = buildICS(
+  tasks.map((t) => ({
+    date: t.date,
+    title: `${who} - ${t.unit}`,
+    description: `${fileName || "Excel"} üzerinden üretildi (tarayıcıda).`,
+  }))
+);
 
-    const safe = who.replace(/[^\p{L}\p{N}\s_-]/gu, "").trim().replace(/\s+/g, "_");
-    downloadTextFile(`${safe || "takvim"}.ics`, value);
-  }
+downloadTextFile(`${safe || "takvim"}.ics`, ics);
 
   return (
     <main style={{ maxWidth: 980, margin: "40px auto", padding: 16, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto" }}>
