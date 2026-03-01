@@ -294,7 +294,9 @@ downloadTextFile(`${safe || "takvim"}.ics`, ics);
             >
               <option value="">{people.length ? "Seç..." : "Önce Excel yükle"}</option>
               {people.map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p} value={p}>
+                  {p}
+                </option>
               ))}
             </select>
           </div>
