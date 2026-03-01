@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
-import { createEvents } from "ics";
+
 
 type RowObj = Record<string, any>;
 
