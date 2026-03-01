@@ -3,8 +3,8 @@
 import React, { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 
-
 type RowObj = Record<string, any>;
+type Task = { date: Date; unit: string };
 
 function normalizeName(s: string) {
   return (s ?? "")
@@ -12,7 +12,7 @@ function normalizeName(s: string) {
     .trim()
     .toUpperCase()
     .replaceAll("İ", "I")
-    .replaceAll("İ", "I")
+    .replaceAll("İ", "I")
     .replaceAll("Ş", "S")
     .replaceAll("Ğ", "G")
     .replaceAll("Ü", "U")
@@ -20,45 +20,11 @@ function normalizeName(s: string) {
     .replaceAll("Ç", "C");
 }
 
-function asDate(value: any): Date | null {
-  if (!value) return null;
-  if (value instanceof Date && !isNaN(value.getTime())) return value;
-
-  if (typeof value === "number") {
-    const d = XLSX.SSF.parse_date_code(value);
-    if (d && d.y && d.m && d.d) return new Date(d.y, d.m - 1, d.d);
-  }
-
-  const str = value.toString().trim();
-  const m1 = str.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-  if (m1) return new Date(Number(m1[3]), Number(m1[2]) - 1, Number(m1[1]));
-
-  const m2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (m2) return new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1]));
-
-  const m3 = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m3) return new Date(Number(m3[1]), Number(m3[2]) - 1, Number(m3[3]));
-
-  return null;
-}
-
-function downloadTextFile(filename: string, content: string, mime = "text/calendar") {
-  const blob = new Blob([content], { type: mime + ";charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
 function toICSDateUTC(d: Date) {
-  // UTC timestamp like 20260301T120000Z
   return (
     d.getUTCFullYear() +
     pad(d.getUTCMonth() + 1) +
@@ -72,7 +38,6 @@ function toICSDateUTC(d: Date) {
 }
 
 function toDateValue(d: Date) {
-  // VALUE=DATE like 20260306
   return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate());
 }
 
@@ -85,8 +50,7 @@ function escapeICS(text: string) {
 }
 
 function buildICS(events: { date: Date; title: string; description?: string }[]) {
-  const now = new Date();
-  const dtstamp = toICSDateUTC(now);
+  const dtstamp = toICSDateUTC(new Date());
 
   const lines: string[] = [
     "BEGIN:VCALENDAR",
@@ -98,11 +62,11 @@ function buildICS(events: { date: Date; title: string; description?: string }[])
 
   for (const e of events) {
     const uid =
-      (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : String(Math.random()).slice(2) + "@exceltoics";
 
-    // all-day event (DTEND is next day)
+    // All-day event: start date -> next day as DTEND
     const startDate = new Date(e.date.getFullYear(), e.date.getMonth(), e.date.getDate());
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 1);
@@ -120,6 +84,43 @@ function buildICS(events: { date: Date; title: string; description?: string }[])
   lines.push("END:VCALENDAR");
   return lines.join("\r\n");
 }
+
+function downloadTextFile(filename: string, content: string, mime = "text/calendar") {
+  const blob = new Blob([content], { type: `${mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function asDate(value: any): Date | null {
+  if (!value) return null;
+
+  if (value instanceof Date && !isNaN(value.getTime())) return value;
+
+  if (typeof value === "number") {
+    const d = XLSX.SSF.parse_date_code(value);
+    if (d && d.y && d.m && d.d) return new Date(d.y, d.m - 1, d.d);
+  }
+
+  const str = value.toString().trim();
+
+  const m1 = str.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (m1) return new Date(Number(m1[3]), Number(m1[2]) - 1, Number(m1[1]));
+
+  const m2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m2) return new Date(Number(m2[3]), Number(m2[2]) - 1, Number(m2[1]));
+
+  const m3 = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m3) return new Date(Number(m3[1]), Number(m3[2]) - 1, Number(m3[3]));
+
+  return null;
+}
+
 function sheetToRowsWithSmartHeader(ws: XLSX.WorkSheet): RowObj[] {
   const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
   if (!grid.length) return [];
@@ -162,10 +163,9 @@ function sheetToRowsWithSmartHeader(ws: XLSX.WorkSheet): RowObj[] {
 
     rows.push(obj);
   }
+
   return rows;
 }
-
-type Task = { date: Date; unit: string };
 
 export default function Page() {
   const [rows, setRows] = useState<RowObj[]>([]);
@@ -197,10 +197,10 @@ export default function Page() {
       for (const [unit, val] of Object.entries(r)) {
         if (unit === "TARİH") continue;
         if (!val) continue;
-        const cell = val.toString();
-        if (normalizeName(cell) === target) out.push({ date: dt, unit });
+        if (normalizeName(String(val)) === target) out.push({ date: dt, unit });
       }
     }
+
     out.sort((a, b) => a.date.getTime() - b.date.getTime() || a.unit.localeCompare(b.unit, "tr"));
     return out;
   }, [rows, personPicked, personInput]);
@@ -222,39 +222,21 @@ export default function Page() {
     if (!who) return alert("Lütfen isim yaz veya listeden seç.");
     if (!tasks.length) return alert("Bu isimle eşleşen görev bulunamadı. Yazımı kontrol et.");
 
-    const events = tasks.map((t) => {
-      const y = t.date.getFullYear();
-      const m = t.date.getMonth() + 1;
-      const d = t.date.getDate();
-
-      const start: [number, number, number, number, number] = [y, m, d, 0, 0];
-      const endDate = new Date(y, m - 1, d);
-      endDate.setDate(endDate.getDate() + 1);
-      const end: [number, number, number, number, number] = [
-        endDate.getFullYear(),
-        endDate.getMonth() + 1,
-        endDate.getDate(),
-        0,
-        0,
-      ];
-
-      return {
-        start,
-        end,
+    const ics = buildICS(
+      tasks.map((t) => ({
+        date: t.date,
         title: `${who} - ${t.unit}`,
         description: `${fileName || "Excel"} üzerinden üretildi (tarayıcıda).`,
-      };
-    });
+      }))
+    );
 
-const ics = buildICS(
-  tasks.map((t) => ({
-    date: t.date,
-    title: `${who} - ${t.unit}`,
-    description: `${fileName || "Excel"} üzerinden üretildi (tarayıcıda).`,
-  }))
-);
+    const safe = who
+      .replace(/[^A-Za-z0-9 _-ğüşöçıİĞÜŞÖÇ]/g, "")
+      .trim()
+      .replace(/\s+/g, "_");
 
-downloadTextFile(`${safe || "takvim"}.ics`, ics);
+    downloadTextFile(`${safe || "takvim"}.ics`, ics);
+  }
 
   return (
     <main style={{ maxWidth: 980, margin: "40px auto", padding: 16, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto" }}>
@@ -310,7 +292,7 @@ downloadTextFile(`${safe || "takvim"}.ics`, ics);
               style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #ccc" }}
             />
             <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
-              Büyük/küçük harf ve Türkçe karakter toleranslı (şimdilik tam eşleşme).
+              Büyük/küçük harf ve Türkçe karakter toleranslı (tam eşleşme).
             </div>
           </div>
         </div>
